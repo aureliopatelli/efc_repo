@@ -1,21 +1,20 @@
 ####################################################################################
 ############ TODO
 ## - check everything work with the scipy sparse module (needs -> NODF, projections)
+## - implement the smoothing of the temporal series (at least moving averages)
 ## - projections (?)
 ##
 ####################################################################################
 
 import numpy as np
 import pandas as pd
-import scipy, bicm, copy, ot
+import scipy, bicm, copy
 from tqdm import tqdm
 import matplotlib.pyplot as plt
-from statsmodels.graphics import tsaplots
 from . import fitness_complexity as fc
 from . import nestedness as ned
 from . import eci as eci_index
 from . import projection as pj
-from . import optimal_transport as otm
 
 from bicm.graph_classes import *
 from bicm.network_functions import *
@@ -158,73 +157,12 @@ class efc_matrix:
             s0 = np.nan_to_num(self.matrix).sum(1)
             s1 = np.nan_to_num(self.matrix).sum(0)
             inv_average = np.dot(np.reshape(s0,(self.shape[0],1)), np.reshape(s1,(1,self.shape[1])))/s0.sum()
-            np.divide(np.ones_like(inv_average), inv_average, out=inv_average, where=inv_average!=0)
+            inv_average = 1./inv_average
             inv_average[inv_average == np.inf] = 0
             if inplace:
                 self.matrix = np.nan_to_num(self.matrix*inv_average)
                 return self
             return efc_matrix(np.nan_to_num(self.matrix*inv_average), label_rows=self.label_rows, label_columns=self.label_columns)
-
-    def get_ica(self, inplace=False): # ok with sparse
-        """
-        Get the Revealed Comparative Advantage, aka the Balassa Index, of the efc matrix
-
-        :param inplace: transform the efc matrix to the RCA version
-        :type inplace: bool (False)
-
-        :return: the class
-        """
-
-        if scipy.sparse.issparse(self.matrix):
-            matrix = self.matrix
-        else:
-            matrix = np.array(np.nan_to_num(self.matrix))
-        myGraph = BipartiteGraph()
-        myGraph.set_biadjacency_matrix(matrix)
-        myGraph.solve_tool(linsearch=True, verbose=False, print_error=False, model='biwcm_c')
-        avg_mat = np.divide(np.ones_like(myGraph.avg_mat),  myGraph.avg_mat, where=myGraph.avg_mat>0)
-        avg_mat[avg_mat == np.inf] = 0
-        matrix = np.nan_to_num(matrix * avg_mat)
-        if inplace:
-            if scipy.sparse.issparse(self.matrix):
-                del self.matrix
-                self.matrix = matrix.tocsr()
-            else:
-                del self.matrix
-                self.matrix = matrix
-
-        return efc_matrix(matrix, label_rows=self.label_rows, label_columns=self.label_columns)
-
-    def get_incompatibility_matrix(self, inplace=False):  # ok with sparse
-        """
-        Get the Revealed Comparative Advantage, aka the Balassa Index, of the efc matrix
-
-        :param inplace: transform the efc matrix to the RCA version
-        :type inplace: bool (False)
-
-        :return: the class
-        """
-        if scipy.sparse.issparse(self.matrix):
-            matrix = self.matrix
-        else:
-            matrix = np.array(np.nan_to_num(self.matrix))
-        myGraph = BipartiteGraph()
-        myGraph.set_biadjacency_matrix(matrix)
-        myGraph.solve_tool(linsearch=True, verbose=False, print_error=False, model='biwcm_c')
-        avg_mat = np.divide(np.ones_like(myGraph.avg_mat), myGraph.avg_mat, where=myGraph.avg_mat != 0)
-        mask0 = (avg_mat > 0)
-        avg_mat_exp = np.ones_like(avg_mat)
-        avg_mat_exp[mask0] = np.exp(-matrix[mask0] * avg_mat[mask0])
-        matrix = 1. - avg_mat_exp
-        if inplace:
-            if scipy.sparse.issparse(self.matrix):
-                del self.matrix
-                self.matrix = matrix.tocsr()
-            else:
-                del self.matrix
-                self.matrix = matrix
-
-        return efc_matrix(matrix, label_rows=self.label_rows, label_columns=self.label_columns)
 
     def get_binarize(self, method='rca', full_return=False, threshold=1): # ok with sparse
         """
@@ -254,7 +192,7 @@ class efc_matrix:
                 self.matrix = bin_mat
             else:
                 self.matrix = 1. - self.matrix
-                self.get_binary(self, threshold=1, inplace=True)
+                self.get_binary(self, threshold=1, inplace=False)
         elif method == 'mu biwcm' or method == 'biwcm':
             if scipy.sparse.issparse(self.matrix):
                 matrix = self.matrix
@@ -292,8 +230,6 @@ class efc_matrix:
             if N != np.nan:
                 dx = (maxx-minx)/N
             y, x = np.histogram(data , bins=np.arange(minx,maxx,dx))
-            if self.matrix.data.dtype == 'int64':
-                return pd.DataFrame(y,index=x[:-1]+dx)
             return pd.DataFrame(y,index=x[:-1]+dx*0.5)
 
     def _eci(self, ztransform=True): # ok with sparse
@@ -324,13 +260,8 @@ class efc_matrix:
         self.fitness = fit.to_numpy()
         self.complexity = com.to_numpy()
 
-    def _fitness_complexity_mazzolini(self, max_iteration = 1000, check_stop='distance', min_distance=1e-14, normalization='mean', fit_ic=[], com_ic=[], removelowdegrees=False, verbose=False, gamma=-1.0, alpha=1.0): # ok with sparse
-        fit, com = fc.fitness_complexity_mazzolini(self.matrix.copy(), max_iteration = max_iteration, check_stop=check_stop, min_distance=min_distance, normalization=normalization, fit_ic=fit_ic, com_ic=com_ic, removelowdegrees=removelowdegrees, verbose=verbose, gamma=gamma, alpha=alpha)
-        self.fitness = fit.to_numpy()
-        self.complexity = com.to_numpy()
-
-    def _fitness_complexity_mariani(self, max_iteration = 1000, check_stop='distance', min_distance=1e-14, normalization='mean', fit_ic=[], com_ic=[], removelowdegrees=False, verbose=False):
-        fit, com = fc.fitness_complexity_mariani(self.matrix.copy(), max_iteration = max_iteration, check_stop=check_stop, min_distance=min_distance, normalization=normalization, fit_ic=fit_ic, com_ic=com_ic, removelowdegrees=removelowdegrees, verbose=verbose)
+    def _fitness_complexity_mazzolini(self, max_iteration = 1000, check_stop='distance', min_distance=1e-14, normalization='mean', fit_ic=[], com_ic=[], removelowdegrees=False, verbose=False, gamma=gamma): # ok with sparse
+        fit, com = fc.fitness_complexity_mazzolini(self.matrix.copy(), max_iteration = max_iteration, check_stop=check_stop, min_distance=min_distance, normalization=normalization, fit_ic=fit_ic, com_ic=com_ic, removelowdegrees=removelowdegrees, verbose=verbose, gamma=gamma)
         self.fitness = fit.to_numpy()
         self.complexity = com.to_numpy()
 
@@ -340,32 +271,6 @@ class efc_matrix:
     def _diversification_ubiquity(self): # ok with sparse
         self.diversification = np.nan_to_num(self.matrix).sum(1)
         self.ubiquity  = np.nan_to_num(self.matrix).sum(0)
-
-    def _sinkhorn_divergence(self, weight0, weight1, epsilon=0.5, method='pot', max_iteration=10000):
-        weight0 = np.array(weight0)
-        weight1 = np.array(weight1)
-        if method=='mine':
-            u, v, pi, obj = otm.sinkhorn_divergence(self.matrix, weight0, weight1, epsilon=epsilon, mass=True, max_iteration=max_iteration)
-            return u, v, pi
-        elif method == 'log':
-                u, v, pi, obj = otm.sinkhorn_divergence_logs(self.matrix, weight0, weight1, epsilon=epsilon, mass=True, max_iteration=max_iteration)
-                return u, v, pi
-        elif method == 'emd':
-                pi, logvalued = ot.emd(weight0, weight1, self.matrix.astype(float), log=True)
-                return np.exp(logvalued['u']), np.exp(logvalued['v']), pi
-        else:
-            pi, logvalued = ot.bregman.sinkhorn_stabilized(weight0, weight1, self.matrix.astype(float), reg=epsilon, log=True)
-            return np.exp(logvalued['logu']), np.exp(logvalued['logv']), pi
-
-    def _sinkhorn_unbalanced_divergence(self, weight0, weight1, epsilon=0.5, method='pot', tau1=None, tau2=None, max_iteration=1000):
-        if method=='mine':
-            u, v, pi, obj = otm.sinkhorn_divergence(self.matrix, weight0, weight1, epsilon=epsilon, mass=True, max_iteration=max_iteration,tau1=tau1, tau2=tau2)
-            return u, v, pi
-        elif method == 'log':
-            pi, logvalued = ot.unbalanced.sinkhorn_unbalanced(weight0, weight1, self.matrix.astype(float), reg=epsilon, log=True)
-            return np.exp(logvalued['logu']), np.exp(logvalued['logv']), pi
-        pi, logvalued = ot.unbalanced.sinkhorn_unbalanced(weight0, weight1, self.matrix.astype(float), reg=epsilon, log=True)
-        return np.exp(logvalued['logu']), np.exp(logvalued['logv']), pi
 
     def remove_low_degrees(self, threshold=0, inplace=False):
         """
@@ -516,14 +421,8 @@ class efc_matrix:
                 self._fitness_complexity_servedio(max_iteration=max_iteration, check_stop=check_stop, min_distance=min_distance, normalization=normalization, fit_ic=fit_ic, com_ic=com_ic, removelowdegrees=removelowdegrees, verbose=verbose, delta=delta)
             elif method=='mazzolini':
                 self._fitness_complexity_mazzolini(max_iteration=max_iteration, check_stop=check_stop, min_distance=min_distance, normalization=normalization, fit_ic=fit_ic, com_ic=com_ic, removelowdegrees=removelowdegrees, verbose=verbose, gamma=gamma)
-            elif method == 'mariani':
-                self._fitness_complexity_mariani(max_iteration=max_iteration, check_stop=check_stop, min_distance=min_distance, normalization=normalization, fit_ic=fit_ic, com_ic=com_ic, removelowdegrees=removelowdegrees, verbose=verbose)
             else:
-                self._fitness_complexity(max_iteration=max_iteration, check_stop=check_stop, min_distance=min_distance, normalization=normalization, fit_ic=fit_ic, com_ic=com_ic, removelowdegrees=removelowdegrees, verbose=verbose)
-            if consider_dummy:
-                comsum = self.complexity.sum()
-                self.complexity /= comsum
-                self.fitness = self.matrix.dot(self.complexity)#self.get_exogenous_fitness(self.complexity, aspandas=False)
+                self._fitness_complexity(max_iteration=max_iteration, check_stop=check_stop, min_distance=min_distance, normalization=normalization, fit_ic=fit_ic, com_ic=com_ic, removelowdegrees=removelowdegrees, verbose=verbose, consider_dummy=consider_dummy)
         if aspandas:
             if self.label_rows is None:
                 self.label_rows = range(self.shape[0])
@@ -554,14 +453,8 @@ class efc_matrix:
                 self._fitness_complexity_servedio(max_iteration=max_iteration, check_stop=check_stop, min_distance=min_distance, normalization=normalization, fit_ic=fit_ic, com_ic=com_ic, removelowdegrees=removelowdegrees, verbose=verbose, delta=delta)
             elif method=='mazzolini':
                 self._fitness_complexity_mazzolini(max_iteration=max_iteration, check_stop=check_stop, min_distance=min_distance, normalization=normalization, fit_ic=fit_ic, com_ic=com_ic, removelowdegrees=removelowdegrees, verbose=verbose, gamma=gamma)
-            elif method == 'mariani':
-                self._fitness_complexity_mariani(max_iteration=max_iteration, check_stop=check_stop, min_distance=min_distance, normalization=normalization, fit_ic=fit_ic, com_ic=com_ic, removelowdegrees=removelowdegrees, verbose=verbose)
             else:
                 self._fitness_complexity(max_iteration=max_iteration, check_stop=check_stop, min_distance=min_distance, normalization=normalization, fit_ic=fit_ic, com_ic=com_ic, removelowdegrees=removelowdegrees, verbose=verbose, consider_dummy=consider_dummy)
-            if consider_dummy:
-                comsum = self.complexity.sum()
-                self.complexity /= comsum
-                self.fitness = self.matrix.dot(self.complexity)#self.get_exogenous_fitness(self.complexity, aspandas=False)
         if aspandas:
             if self.label_columns is None:
                 self.label_columns = range(self.shape[1])
@@ -606,73 +499,6 @@ class efc_matrix:
                 self.label_columns = range(self.shape[1])
             return pd.DataFrame(self.pci, index=self.label_columns, columns=['pci'])
         return self.pci
-
-    def get_row(self, row, aspandas=False):
-        if self.label_rows is not None:
-            if row in self.label_rows:
-                row = np.where(row == np.array(self.label_rows))[0]
-        series = self.matrix[row,:].flatten()
-        if aspandas:
-            series = pd.DataFrame(series, index=self.label_rows)
-        return series
-
-    def get_column(self, column, aspandas=False):
-        if self.label_columns is not None:
-            if column in self.label_columns:
-                column = np.where(column == np.array(self.label_columns))[0]
-        series = self.matrix[:,column].flatten()
-        if aspandas:
-            series = pd.DataFrame(series, index=self.label_columns)
-        return series
-
-    def get_element(self, row, column):
-        if row in self.label_rows:
-            row = np.where(row == self.label_rows)[0]
-        if column in self.label_columns:
-            column = np.where(column == self.label_columns)[0]
-        return self.matrix[row,column]
-
-    def get_contiguous_zeros(self, index='fitness'):
-        byrows = 0
-        bycolumns = 0
-        
-        if index == 'eci':
-            set0 = self.get_eci()
-            set1 = self.get_pci()
-            set0 = np.argsort(set0)[::-1]
-            set1 = np.argsort(set1)[::-1]
-        elif index == 'degree':
-            set0 = self.get_diversification()
-            set1 = self.get_ubiquity()
-            set0 = np.argsort(set0)[::-1]
-            set1 = np.argsort(set1)[::-1]
-        elif index == 'no':
-            set0 = np.arange(self.shape[0])
-            set1 = np.arange(self.shape[1])#[::-1]
-        elif index == 'invert_x':
-            set0 = self.get_fitness()
-            set1 = self.get_complexity()
-            set0 = np.argsort(set0)[::-1]
-            set1 = np.argsort(set1)[::-1]
-        else:
-            set0 = self.get_fitness()
-            set1 = self.get_complexity()
-            set0 = np.argsort(set0)[::-1]
-            set1 = np.argsort(set1)[::]
-        matrix = self.matrix[set0][:,set1]
-        
-        for row in matrix:
-            positions = np.where(row>0)[0]
-            byrows += self.shape[1] - positions[-1]
-        byrows /= self.shape[0]*self.shape[1]
-
-        for row in matrix.transpose():
-            positions = np.where(row>0)[0]
-            bycolumns += self.shape[0] - positions[-1]
-        bycolumns /= self.shape[0]*self.shape[1]
-
-        return byrows, bycolumns
-
     
     def copy(self): # ok with sparse
         """
@@ -762,11 +588,8 @@ class efc_matrix:
                 proj = pj.occurrence_matrix(self.matrix, row_proj=rows)
 
             elif method == 'taxonomy':
-                if top:
-                    tax = pj.taxonomy_matrix(self.matrix, row_proj=rows)
-                    proj = pj.net_top(tax, top)
-                else:
-                    proj = pj.taxonomy_matrix(self.matrix, row_proj=rows)
+                tax = pj.taxonomy_matrix(self.matrix, row_proj=rows)
+                proj = pj.net_top(tax, top)
 
             elif method == 'assist matrix':
                 proj = pj.assist_matrix(self.matrix, self.matrix, row_proj=rows)
@@ -784,7 +607,7 @@ class efc_matrix:
             pval = myGraph.get_bicm_matrix()
             size_random_ensemble = int(5./alpha)
             random_matrices = {}
-            for r in tqdm(range(size_random_ensemble)):
+            for r in range(size_random_ensemble):
                 random_matrices[r] = pj.random_binary_matrix(pval)
                 
             if verbose:
@@ -793,7 +616,7 @@ class efc_matrix:
             if method == 'cooccurrence':
                 proj = pj.occurrence_matrix(self.matrix, row_proj=rows)
                 adj = np.zeros(proj.shape)
-                for r in tqdm(range(size_random_ensemble)):
+                for r in range(size_random_ensemble):
                     random_proj = pj.occurrence_matrix(random_matrices[r], row_proj=rows)
                     adj += (random_proj > proj).astype(int)
                 adj /= size_random_ensemble
@@ -802,7 +625,7 @@ class efc_matrix:
             elif method == 'taxonomy':
                 proj = pj.taxonomy_matrix(self.matrix, row_proj=rows)
                 adj = np.zeros(proj.shape)
-                for r in tqdm(range(size_random_ensemble)):
+                for r in range(size_random_ensemble):
                     random_proj = pj.taxonomy_matrix(random_matrices[r], row_proj=rows)
                     adj += (random_proj > proj).astype(int)
                 adj /= size_random_ensemble
@@ -811,7 +634,7 @@ class efc_matrix:
             elif method == 'assist matrix':
                 proj = pj.assist_matrix(self.matrix, self.matrix, row_proj=rows)
                 adj = np.zeros(proj.shape)
-                for r in tqdm(range(size_random_ensemble)):
+                for r in range(size_random_ensemble):
                     random_proj = pj.assist_matrix(random_matrices[r], random_matrices[r], row_proj=rows)
                     adj += (random_proj > proj).astype(int)
                 adj /= size_random_ensemble
@@ -820,7 +643,7 @@ class efc_matrix:
             elif method == 'product space':
                 proj = pj.proximity_matrix(self.matrix, row_proj=rows)
                 adj = np.zeros(proj.shape)
-                for r in tqdm(range(size_random_ensemble)):
+                for r in range(size_random_ensemble):
                     random_proj = pj.proximity_matrix(random_matrices[r], row_proj=rows)
                     adj += (random_proj > proj).astype(int)
                 adj /= size_random_ensemble
@@ -836,9 +659,9 @@ class efc_matrix:
                 return pd.DataFrame(proj, index=self.label_rows, columns=self.label_rows)
         return proj
 
-    def plot_matrix(self, index='fitness', cmap='Blues', label_rows='Countries', label_columns='Products', fontsize=20, user_set0=None, user_set1=None, vmin=None, vmax=None, zero_nan=False):
+    def plot_matrix(self, index='fitness', cmap='Blues', label_rows='Countries', label_columns='Products', fontsize=20):
         """
-        Plot the matrix ordered using matplotlib matshow
+        Plot the matrix ordered using
         :param index:
         :param cmap:
         :param label_rows:
@@ -846,31 +669,14 @@ class efc_matrix:
         :param fontsize:
         :return:
         """
-
-        if user_set0 is not None and user_set1 is not None:
-            index='custom'
-
         if index == 'eci':
             set0 = self.get_eci()
             set1 = self.get_pci()
             set0 = np.argsort(set0)[::-1]
             set1 = np.argsort(set1)[::-1]
-        elif index == 'degree':
+        if index == 'degree':
             set0 = self.get_diversification()
             set1 = self.get_ubiquity()
-            set0 = np.argsort(set0)[::-1]
-            set1 = np.argsort(set1)[::-1]
-        elif index == 'no':
-            set0 = np.arange(self.shape[0])
-            set1 = np.arange(self.shape[1])#[::-1]
-        elif index == 'invert_x':
-            set0 = self.get_fitness()
-            set1 = self.get_complexity()
-            set0 = np.argsort(set0)[::-1]
-            set1 = np.argsort(set1)[::-1]
-        elif index == 'custom':
-            set0 = user_set0
-            set1 = user_set1
             set0 = np.argsort(set0)[::-1]
             set1 = np.argsort(set1)[::-1]
         else:
@@ -879,19 +685,14 @@ class efc_matrix:
             set0 = np.argsort(set0)[::-1]
             set1 = np.argsort(set1)[::]
         matrix = self.matrix[set0][:,set1]
-        if zero_nan:
-            matrix[matrix==0] = np.nan
         fig, ax = plt.subplots(figsize=(18, 9))
-        ax.matshow(matrix, aspect='auto', cmap=cmap, vmin=vmin, vmax=vmax)
+        ax.matshow(matrix, aspect='auto', cmap=cmap)
         if index == 'eci':
             ax.set_xlabel('{} (ordered by increasing PCI)'.format(label_columns), fontsize=fontsize, color='black', loc='center')
             ax.set_ylabel('{} (ordered by decreasing ECI)'.format(label_rows), fontsize=fontsize, color='black', loc='center')
-        elif index == 'degree':
+        if index == 'degree':
             ax.set_xlabel('{} (ordered by increasing degree)'.format(label_columns), fontsize=fontsize, color='black', loc='center')
             ax.set_ylabel('{} (ordered by decreasing degree)'.format(label_rows), fontsize=fontsize, color='black', loc='center')
-        elif index == 'custom':
-            ax.set_xlabel('{} (ordered by increasing rank)'.format(label_columns), fontsize=fontsize, color='black', loc='center')
-            ax.set_ylabel('{} (ordered by decreasing rank)'.format(label_rows), fontsize=fontsize, color='black', loc='center')
         else:
             ax.set_xlabel('{} (ordered by increasing Q)'.format(label_columns), fontsize=fontsize, color='black', loc='center')
             ax.set_ylabel('{} (ordered by decreasing F)'.format(label_rows), fontsize=fontsize, color='black', loc='center')
@@ -973,17 +774,13 @@ class efc_matrix:
     def get_masked_from_indices(self, list_rows=None, list_columns=None):
         if list_rows is None and list_columns is None:
             return self
-
         if list_rows is not None:
             absent_items = 0
             for e in list_rows:
                 if e not in self.label_rows:
                     absent_items += 1
             if absent_items:
-                print('ERROR: there are elements of list_rows not present in the matrix row labels:', absent_items)
-                for e in list_rows:
-                    if e not in self.label_rows:
-                        print(e)
+                print('ERROR: there are elements of list_rows not present in the matrix row labels')
                 return None
             mask_rows = np.isin(self.label_rows,list_rows)
         else:
@@ -993,23 +790,23 @@ class efc_matrix:
         if list_columns is not None:
             absent_items = 0
             for e in list_columns:
-                if e not in self.label_columns:
+                if e not in self.label_rows:
                     absent_items += 1
             if absent_items:
-                print('ERROR: there are elements of list_columns not present in the matrix column labels', absent_items)
+                print('ERROR: there are elements of list_columns not present in the matrix column labels')
                 return None
             mask_columns = np.isin(self.label_columns,list_columns)
         else:
             list_columns = self.label_columns
             mask_columns = np.ones((self.shape[1])).astype(bool)
-
+            
+        
         if scipy.sparse.issparse(self.matrix):
             matrix = self.matrix[mask_rows,mask_columns]
             return efc_matrix(matrix, label_rows=self.label_rows[mask_rows], label_columns=self.label_columns[mask_columns])
         else:
-            matrix = self.matrix[mask_rows, :][:, mask_columns]
+            matrix = self.matrix[mask_rows,:][:,mask_columns]
             return efc_matrix(matrix, label_rows=self.label_rows[mask_rows], label_columns=self.label_columns[mask_columns])
-
         return None
     
     
@@ -1029,24 +826,6 @@ class efc_matrix:
             return pd.DataFrame(matrix, index=self.label_rows, columns=self.label_columns)
         return matrix
 
-    def get_sector_fitness(self, dict_sectors, complexity=None, aspandas=False, norm='bysector'):
-        if self.label_columns is None:
-            print('ERROR: label_columns is not defined')
-            return None
-        if complexity is None:
-            complexity = self.get_complexity()
-        label_columns_short = [dict_sectors.get(l,l) for l in self.label_columns]
-        df = pd.DataFrame(self.matrix*complexity).T
-        df['new label'] = label_columns_short
-        df = df.groupby('new label').sum(numeric_only=True).T
-        if norm == 'bysector':
-            df /= df.sum(0)
-        if aspandas:
-            if self.label_rows is None:
-                print('ERROR: label_rows is not defined')
-                return None
-            return pd.DataFrame(df.to_numpy(), index=self.label_rows, columns=df.columns.to_list())
-        return df.to_numpy()
 
 
     @classmethod
@@ -1249,86 +1028,6 @@ class efc_matrix_dataset:
             self.matrices[year].get_binarize(method=method, full_return=False, threshold=threshold)
         return self
     
-    def get_binary(self, threshold=1):
-        for year in tqdm(self.rangeyear, leave=self.leave_tqdm):
-            self.matrices[year].get_binary(threshold=threshold, inplace=True)
-        return self
-
-    def get_ica(self, inplace=False):
-        if inplace:
-            for year in tqdm(self.rangeyear, leave=self.leave_tqdm):
-                self.matrices[year].get_ica(inplace=inplace)
-            return self
-        else:
-            matrices = {}
-            for year in tqdm(self.rangeyear, leave=self.leave_tqdm):
-                matrices[year] = self.matrices[year].get_ica(inplace=False).get_matrix()
-            data = efc_matrix_dataset(matrices)
-            data.label_rows = self.label_rows
-            data.label_columns = self.label_columns
-            return data
-
-    def get_rca(self, inplace=False):
-        if inplace:
-            for year in tqdm(self.rangeyear, leave=self.leave_tqdm):
-                self.matrices[year].get_rca(inplace=inplace)
-            return self
-        else:
-            matrices = {}
-            for year in tqdm(self.rangeyear, leave=self.leave_tqdm):
-                matrices[year] = self.matrices[year].get_rca(inplace=inplace).get_matrix()
-            data = efc_matrix_dataset(matrices)
-            data.label_rows = self.label_rows
-            data.label_columns = self.label_columns
-            return data
-
-    def get_incompatibility_matrix(self, inplace=False):  # ok with sparse
-        if inplace:
-            for year in tqdm(self.rangeyear, leave=self.leave_tqdm):
-                self.matrices[year].get_incompatibility_matrix(inplace=inplace)
-            return self
-        else:
-            matrices = {}
-            for year in tqdm(self.rangeyear, leave=self.leave_tqdm):
-                matrices[year] = self.matrices[year].get_incompatibility_matrix(inplace=inplace).get_matrix()
-            data = efc_matrix_dataset(matrices)
-            data.label_rows = self.label_rows
-            data.label_columns = self.label_columns
-            return data
-
-    def get_series(self, row, column, aspandas=False):
-        if row in self.label_rows:
-            row = np.where(row == self.label_rows)[0]
-        if column in self.label_columns:
-            column = np.where(column == self.label_columns)[0]
-
-        series = []
-        for year in tqdm(self.rangeyear, leave=self.leave_tqdm):
-            series.append(self.matrices[year].matrix[row,column])
-        series = np.array(series)
-
-        if aspandas:
-            series = pd.DataFrame(series, index=self.rangeyear)
-
-        return series
-
-    def get_list_dataset(self):
-        dataset = self.matrices[self.rangeyear[0]].get_matrix(aspandas=True).unstack()
-        for year in tqdm(self.rangeyear[1:], leave=self.leave_tqdm):
-            dataset = pd.concat([dataset, self.matrices[year].get_matrix(aspandas=True).unstack()], axis=1, sort=True)
-        dataset.columns = self.rangeyear
-        return dataset
-
-    def get_autocorrelation_series(self):
-        nlags = len(self.rangeyear)-1
-        dataset = self.get_list_dataset()
-        autocorrelation = []
-        for idx in tqdm(dataset.index, leave=self.leave_tqdm):
-            x = dataset.loc[idx]
-            autocorrelation.append(tsaplots.acf(x, nlags=nlags))
-        autocorrelation = pd.DataFrame(autocorrelation, index=dataset.index, columns=range(nlags+1))
-        return autocorrelation
-
     def get_projection(self, method='cooccurrence', average=False, dt=5, rows=False, top=2, alpha=0.05, verbose=False):
         if average:
             if rows:
@@ -1364,7 +1063,7 @@ class efc_matrix_dataset:
             else:
                 for year in self.rangeyear[dt:]:
                     y0 = year - dt
-                    proj += cooccurrence_matrix(self.matrices[year], mat2, row_proj=False)
+                    proj += cooccurrence_matrix(self.matrices[year], mat2, row_proj=False)        
         
             return proj
         return None
@@ -1373,28 +1072,25 @@ class efc_matrix_dataset:
     def get_smoothing_exponential_average(self, alpha=0.95, inplace=False):
         one_minus_alpha = 1.0-alpha
         matrices = {}
-        previous_matrix = self.matrices[self.rangeyear[0]].matrix.copy()
-        matrices[self.rangeyear[0]] = previous_matrix.copy()
-        for count in tqdm(range(1,len(self.rangeyear)), leave=self.leave_tqdm):
-            rolling_matrix = alpha*self.matrices[self.rangeyear[count]].matrix + one_minus_alpha*previous_matrix
-            previous_matrix = self.matrices[self.rangeyear[count]].matrix
+        rolling_matrix = self.matrices[self.rangeyear[0]].matrix.copy()
+        matrices[self.rangeyear[0]] = rolling_matrix.copy()
+        for count in range(1,len(self.rangeyear)):
+            rolling_matrix = alpha*self.matrices[self.rangeyear[count]].matrix + one_minus_alpha*rolling_matrix
             matrices[self.rangeyear[count]] = rolling_matrix.copy()
         
         if inplace:
             del self.matrices
             self.matrices = matrices
             return self
-
-        data = efc_matrix_dataset(matrices)
-        data.label_rows=self.label_rows
-        data.label_columns=self.label_columns
-        return data
+        
+        return efc_matrix_dataset(matrices, label_rows=self.label_rows, label_columns=self.label_columns)
 
     def get_smoothing_moving_average(self, k=3, inplace=False):
         matrices = {}
-        for year in tqdm(self.rangeyear, leave=self.leave_tqdm):
-            kleft = max(year-k,self.rangeyear[0])
-            kright = min(year+k,self.rangeyear[-1])
+        for year in self.rangeyear:
+            
+            kleft = max(year-k,0)
+            kright = min(year+k,len(self.rangeyear)-1)
             mat = self.matrices[year].matrix.copy()
             for k in range(kleft,year):
                 mat += self.matrices[k].matrix
@@ -1407,18 +1103,8 @@ class efc_matrix_dataset:
             self.matrices = matrices
             return self
         
-        data = efc_matrix_dataset(matrices)
-        data.label_rows=self.label_rows
-        data.label_columns=self.label_columns
-        return data
+        return efc_matrix_dataset(matrices, label_rows=self.label_rows, label_columns=self.label_columns)
             
-    def get_masked_from_indices(self, list_rows=None, list_columns=None):
-        data = {}
-        for year in tqdm(self.rangeyear, leave=self.leave_tqdm):
-            self.matrices[year].label_rows = np.array(self.label_rows)
-            self.matrices[year].label_columns = np.array(self.label_columns)
-            data[year] = self.matrices[year].get_masked_from_indices(list_rows=list_rows, list_columns=list_columns).get_matrix(aspandas=True)
-        return efc_matrix_dataset(data)
 
     def store_matrices(self, folder, name, store_type='csv'):
         for year in tqdm(self.rangeyear, leave=self.leave_tqdm):
@@ -1437,74 +1123,15 @@ class efc_matrix_dataset:
             return self.matrices[year].get_matrix(aspandas=aspandas)
         return None
 
-    def get_row(self, row, aspandas=False):
-        if row in self.label_rows:
-            row = np.where(row == np.array(self.label_rows))[0]
-        series = self.matrices[self.rangeyear[0]].matrix[row,:]
-        for year in tqdm(self.rangeyear[1:], leave=self.leave_tqdm):
-            series = np.vstack([series, self.matrices[year].matrix[row,:]])
-        if aspandas:
-            return pd.DataFrame(series, index=self.rangeyear, columns=self.label_columns)
-        return series
-
-    def get_column(self, column, aspandas=False):
-        if column in self.label_columns:
-            column = np.where(column == np.array(self.label_columns))[0]
-        series = self.matrices[self.rangeyear[0]].matrix[:, column]
-        for year in tqdm(self.rangeyear[1:], leave=self.leave_tqdm):
-            series = np.vstack([series, self.matrices[year].matrix[:, column]])
-        if aspandas:
-            return pd.DataFrame(series, index=self.rangeyear, columns=self.label_rows)
-        return series
-
-    def get_element(self, row, column, aspandas=True):
-        if row in self.label_rows:
-            row = np.where(row == np.array(self.label_rows))[0]
-        if column in self.label_columns:
-            column = np.where(column == np.array(self.label_columns))[0]
-        series = []
-        for year in tqdm(self.rangeyear, leave=self.leave_tqdm):
-            series.append(self.matrices[year].matrix[row, column])
-        if aspandas:
-            return pd.DataFrame(series, index=self.rangeyear)
-        return np.array(series)
-
-    def get_sector_fitness(self, dict_sectors, complexity=None, aspandas=False, norm='bysector'):
-        if dict_sectors is None:
-            print('ERROR: dict_sectors is not defined')
-            return None
-        if self.label_columns is None:
-            print('ERROR: label_columns is not defined')
-            return None
-        if complexity is None:
-            complexity = self.get_complexity()
-        if isinstance(complexity, pd.DataFrame):
-            complexity = complexity.to_numpy()
-        sector = {}
-        for i,year in tqdm(enumerate(self.rangeyear), leave=self.leave_tqdm):
-            efc_mat = self.matrices[year]
-            efc_mat.label_rows = self.label_rows
-            efc_mat.label_columns = self.label_columns
-            sector[year] = efc_mat.get_sector_fitness(dict_sectors, complexity=complexity[:,i], norm=norm, aspandas=aspandas)
-        return sector
-
+        
     @classmethod
-    def load_matrices(cls, path, rangeyear, leave_tqdm=True, header=0, index_col=0):
-        '''
-        This function load the database composed by matrices into the efc_matrix_database class
-        :param path: the origin path of the database
-        :param rangeyear: the list of keys for the different matrices, typically the range of years spanning the dataset
-        :param leave_tqdm: tqdm variable used to remove or not the tqdm bar
-        :param header: the position, if any, of the header in the case of csv files
-        :param index_col: the column, if any, of the index in the case of csv files
-        :return: the efc_matrix_dataset collecting the database
-        '''
+    def load_matrices(cls, path, rangeyear, verbose=False, leave_tqdm=True):
         supp = {}
         for year in tqdm(rangeyear, leave=leave_tqdm):
             path2 = path.replace('{}','{}'.format(year))
             mat = None
             if path[-4:] == '.csv':
-                mat = pd.read_csv(path2, index_col=index_col, header=header)
+                mat = pd.read_csv(path2, index_col=0)
             elif path[-4:] == '.pkl' or path[-3:] == '.pk':
                 mat = pd.read_pickle(path2)
             elif path[-4:] == '.npz':
@@ -1514,42 +1141,3 @@ class efc_matrix_dataset:
             supp[year] = mat
 
         return cls(supp)
-
-    def get_exogenous_fitness(cls, complexity, aspandas=False):
-        '''
-        This function compute the exogenous fitness every year in the database.
-
-        :param complexity: the array of the complexity over the range of years
-        :param aspandas: True if the desired output is a pandas DataFrame
-        :return: the numpy array of the pandas DataFrame with the exogenous Fitness over the years
-        '''
-        if (complexity.shape != cls.shape[1:3]).all():
-            print('ERROR: dimensions are different {} != {}'.format(complexity.shape, (cls.shape[1],cls.shape[2])))
-            return None
-        efitness = []
-
-        if isinstance(complexity, np.ndarray) or isinstance(complexity, np.matrix):
-            for i,year in tqdm(enumerate(cls.rangeyear), leave=cls.leave_tqdm):
-                com = complexity[:,i]
-                ef = np.dot(cls.matrices[year].matrix, com).flatten()
-                ef /= np.sum(com)
-                efitness.append(ef)
-
-        elif isinstance(complexity, pd.DataFrame):
-            for year in tqdm(cls.rangeyear, leave=cls.leave_tqdm):
-                com = complexity[year].to_numpy()
-                ef = np.dot(cls.matrices[year].matrix, com).flatten()
-                ef /= np.sum(com)
-                efitness.append(ef)
-
-        else:
-            print('ERROR: the format of the complexity is not a numpy array of a pandas dataframe')
-            return None
-
-        efitness = np.array(efitness).T
-
-        if aspandas:
-            if cls.label_rows is None:
-                return pd.DataFrame(efitness, index=range(cls.shape[0]), columns=cls.rangeyear)
-            return pd.DataFrame(efitness, index=cls.label_rows, columns=cls.rangeyear)
-        return efitness

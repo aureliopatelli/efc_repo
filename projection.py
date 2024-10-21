@@ -11,14 +11,15 @@ def get_edgelist_from_numpy(mat, label=None):
     
 def cooccurrence_matrix(mat1, mat2, row_proj=False):
     if row_proj:
-        mat1 = mat1.transpose()
-        mat2 = mat2.transpose()
-    return np.matmul( mat1.transpose() , mat2 )
+        return np.dot( mat1.transpose() , mat2 )
+    return np.dot(mat1, mat2.transpose())
+
 
 def occurrence_matrix(mat, row_proj=False):
     if row_proj:
-        mat = mat.transpose()
-    return np.matmul(mat.transpose(), mat)
+        return np.dot(mat, mat.transpose())
+    return np.dot(mat.transpose(), mat)
+
 
 def assist_matrix(mat1, mat2, row_proj=False):
     if row_proj:
@@ -44,15 +45,11 @@ def taxonomy_matrix(mat, row_proj=False):
         mat = mat.transpose()
     ubi = mat.sum(0)
     div = mat.sum(1)
-    inv_div = np.nan_to_num(1.0/div)
-    inv_div[inv_div == np.inf] = 0
-    inv_ubi = np.nan_to_num(1.0/ubi)
-    inv_ubi[inv_ubi == np.inf] = 0
-    tax = np.matmul( np.nan_to_num(mat.transpose()*inv_div) , np.nan_to_num(mat) )
-    for p in range(len(ubi)):
-        for pp in range(len(ubi)):
-            tax[p,pp] /= np.max([ubi[p],ubi[pp]])
-    return np.nan_to_num(tax, 0)
+    inv_div = np.divide(np.ones_like(1.0), div, where=div!=0)
+    tax = np.matmul( mat.transpose()*inv_div , mat )
+    max_ubi = np.maximum.outer(ubi, ubi)
+    tax = np.divide(tax, max_ubi, where=max_ubi>0)
+    return tax
 
 def proximity_matrix(mat, row_proj=False):
     if row_proj:
