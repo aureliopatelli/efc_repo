@@ -1533,7 +1533,7 @@ class efc_matrix_dataset:
                 efitness.append(ef)
 
         elif isinstance(complexity, pd.DataFrame):
-            for year in tqdm(cls.rangeyear, leave=cls.leave_tqdm):
+            for year in tqdm(cls.rangeyear, file=sys.stdout, leave=cls.leave_tqdm):
                 com = complexity[year].to_numpy()
                 ef = np.dot(cls.matrices[year].matrix, com).flatten()
                 ef /= np.sum(com)
