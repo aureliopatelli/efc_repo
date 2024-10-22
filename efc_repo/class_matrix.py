@@ -7,7 +7,7 @@
 
 import numpy as np
 import pandas as pd
-import scipy, bicm, copy, ot
+import scipy, bicm, copy, ot, sys
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from statsmodels.graphics import tsaplots
@@ -955,7 +955,7 @@ class efc_matrix:
             ax.set_xlabel('{} (ordered by increasing Q)'.format(label_columns), fontsize=fontsize, color='black', loc='center')
             ax.set_ylabel('{} (ordered by decreasing F)'.format(label_rows), fontsize=fontsize, color='black', loc='center')
             
-            
+
         ax.xaxis.set_ticks_position('bottom')
         ax.set_xticks([0, self.shape[1]-0.5])
         if index == 'eci' or index == 'degree':
@@ -1035,8 +1035,10 @@ class efc_matrix:
             return None
         if complexity is None:
             complexity = self.get_complexity()
+        if isinstance(complexity, pd.DataFrame):
+            complexity = complexity.to_numpy()
         label_columns_short = [dict_sectors.get(l,l) for l in self.label_columns]
-        df = pd.DataFrame(self.matrix*complexity).T
+        df = pd.DataFrame(self.matrix*complexity.flatten()).T
         df['new label'] = label_columns_short
         df = df.groupby('new label').sum(numeric_only=True).T
         if norm == 'bysector':
@@ -1144,7 +1146,7 @@ class efc_matrix_dataset:
         
     def get_fitness(self, aspandas=False, force=False, method=None, max_iteration = 1000, check_stop='distance', min_distance=1e-14, normalization='mean', fit_ic=[], com_ic=[], removelowdegrees=False, verbose=False, consider_dummy=False, delta=1.0):
         self.fitness = np.zeros((self.shape[0],self.shape[2]))
-        for i in tqdm(range(len(self.rangeyear)), leave=self.leave_tqdm):
+        for i in tqdm(range(len(self.rangeyear)), file=sys.stdout, leave=self.leave_tqdm):
             year = self.rangeyear[i]
             fit = self.matrices[year].get_fitness(aspandas=False, force=force, method=method, max_iteration = max_iteration, check_stop=check_stop, min_distance=min_distance, normalization=normalization, fit_ic=fit_ic, com_ic=com_ic, removelowdegrees=removelowdegrees, verbose=verbose, consider_dummy=consider_dummy, delta=delta)
             self.fitness[:,i] = fit[:]
@@ -1161,7 +1163,7 @@ class efc_matrix_dataset:
 
     def get_complexity(self, aspandas=False, force=False, method=None, max_iteration = 1000, check_stop='distance', min_distance=1e-14, normalization='mean', fit_ic=[], com_ic=[], removelowdegrees=False, verbose=False, consider_dummy=False, delta=1.0):
         self.complexity = np.zeros((self.shape[1],self.shape[2]))
-        for i in tqdm(range(len(self.rangeyear)), leave=self.leave_tqdm):
+        for i in tqdm(range(len(self.rangeyear)), file=sys.stdout, leave=self.leave_tqdm):
             year = self.rangeyear[i]
             com = self.matrices[year].get_complexity(aspandas=False, force=force, method=method, max_iteration = max_iteration, check_stop=check_stop, min_distance=min_distance, normalization=normalization, fit_ic=fit_ic, com_ic=com_ic, removelowdegrees=removelowdegrees, verbose=verbose, consider_dummy=consider_dummy, delta=delta)
             self.complexity[:,i] = com[:]
@@ -1177,7 +1179,7 @@ class efc_matrix_dataset:
 
     def get_diversification(self, aspandas=False):
         self.diversification = np.zeros((self.shape[0],self.shape[2]))
-        for i in tqdm(range(len(self.rangeyear)), leave=self.leave_tqdm):
+        for i in tqdm(range(len(self.rangeyear)), file=sys.stdout, leave=self.leave_tqdm):
             year = self.rangeyear[i]
             div = self.matrices[year].get_diversification(aspandas=False)
             self.diversification[:,i] = div[:]
@@ -1188,7 +1190,7 @@ class efc_matrix_dataset:
     
     def get_ubiquity(self, aspandas=False):
         self.ubiquity = np.zeros((self.shape[1],self.shape[2]))
-        for i in tqdm(range(len(self.rangeyear)), leave=self.leave_tqdm):
+        for i in tqdm(range(len(self.rangeyear)), file=sys.stdout, leave=self.leave_tqdm):
             year = self.rangeyear[i]
             ubi = self.matrices[year].get_ubiquity(aspandas=False)
             self.ubiquity[:,i] = ubi[:]
@@ -1199,7 +1201,7 @@ class efc_matrix_dataset:
     
     def get_eci(self, aspandas=False):
         self.eci = np.zeros((self.shape[0],self.shape[2]))
-        for i in tqdm(range(len(self.rangeyear)), leave=self.leave_tqdm):
+        for i in tqdm(range(len(self.rangeyear)), file=sys.stdout, leave=self.leave_tqdm):
             year = self.rangeyear[i]
             div = self.matrices[year].get_eci(aspandas=False)
             self.eci[:,i] = div[:]
@@ -1210,7 +1212,7 @@ class efc_matrix_dataset:
 
     def get_pci(self, aspandas=False):
         self.pci = np.zeros((self.shape[1],self.shape[2]))
-        for i in tqdm(range(len(self.rangeyear)), leave=self.leave_tqdm):
+        for i in tqdm(range(len(self.rangeyear)), file=sys.stdout, leave=self.leave_tqdm):
             year = self.rangeyear[i]
             ubi = self.matrices[year].get_pci(aspandas=False)
             self.pci[:,i] = ubi[:]
@@ -1221,7 +1223,7 @@ class efc_matrix_dataset:
 
     def get_density(self, aspandas=False):
         self.density = np.zeros((self.shape[2]))
-        for i in tqdm(range(len(self.rangeyear)), leave=self.leave_tqdm):
+        for i in tqdm(range(len(self.rangeyear)), file=sys.stdout, leave=self.leave_tqdm):
             year = self.rangeyear[i]
             den = self.matrices[year].get_density()
             self.density[i] = den
@@ -1232,7 +1234,7 @@ class efc_matrix_dataset:
 
     def get_nodf(self, aspandas=False):
         nodf = np.zeros((self.shape[2]))
-        for i in tqdm(range(len(self.rangeyear)), leave=self.leave_tqdm):
+        for i in tqdm(range(len(self.rangeyear)), file=sys.stdout, leave=self.leave_tqdm):
             year = self.rangeyear[i]
             nod = self.matrices[year].get_nodf()
             nodf[i] = nod
@@ -1245,23 +1247,23 @@ class efc_matrix_dataset:
         return copy.deepcopy(self)
     
     def get_binarize(self, method='rca', threshold=1):
-        for year in tqdm(self.rangeyear, leave=self.leave_tqdm):
+        for year in tqdm(self.rangeyear, file=sys.stdout, leave=self.leave_tqdm):
             self.matrices[year].get_binarize(method=method, full_return=False, threshold=threshold)
         return self
     
     def get_binary(self, threshold=1):
-        for year in tqdm(self.rangeyear, leave=self.leave_tqdm):
+        for year in tqdm(self.rangeyear, file=sys.stdout, leave=self.leave_tqdm):
             self.matrices[year].get_binary(threshold=threshold, inplace=True)
         return self
 
     def get_ica(self, inplace=False):
         if inplace:
-            for year in tqdm(self.rangeyear, leave=self.leave_tqdm):
+            for year in tqdm(self.rangeyear, file=sys.stdout, leave=self.leave_tqdm):
                 self.matrices[year].get_ica(inplace=inplace)
             return self
         else:
             matrices = {}
-            for year in tqdm(self.rangeyear, leave=self.leave_tqdm):
+            for year in tqdm(self.rangeyear, file=sys.stdout, leave=self.leave_tqdm):
                 matrices[year] = self.matrices[year].get_ica(inplace=False).get_matrix()
             data = efc_matrix_dataset(matrices)
             data.label_rows = self.label_rows
@@ -1270,12 +1272,12 @@ class efc_matrix_dataset:
 
     def get_rca(self, inplace=False):
         if inplace:
-            for year in tqdm(self.rangeyear, leave=self.leave_tqdm):
+            for year in tqdm(self.rangeyear, file=sys.stdout, leave=self.leave_tqdm):
                 self.matrices[year].get_rca(inplace=inplace)
             return self
         else:
             matrices = {}
-            for year in tqdm(self.rangeyear, leave=self.leave_tqdm):
+            for year in tqdm(self.rangeyear, file=sys.stdout, leave=self.leave_tqdm):
                 matrices[year] = self.matrices[year].get_rca(inplace=inplace).get_matrix()
             data = efc_matrix_dataset(matrices)
             data.label_rows = self.label_rows
@@ -1284,12 +1286,12 @@ class efc_matrix_dataset:
 
     def get_incompatibility_matrix(self, inplace=False):  # ok with sparse
         if inplace:
-            for year in tqdm(self.rangeyear, leave=self.leave_tqdm):
+            for year in tqdm(self.rangeyear, file=sys.stdout, leave=self.leave_tqdm):
                 self.matrices[year].get_incompatibility_matrix(inplace=inplace)
             return self
         else:
             matrices = {}
-            for year in tqdm(self.rangeyear, leave=self.leave_tqdm):
+            for year in tqdm(self.rangeyear, file=sys.stdout, leave=self.leave_tqdm):
                 matrices[year] = self.matrices[year].get_incompatibility_matrix(inplace=inplace).get_matrix()
             data = efc_matrix_dataset(matrices)
             data.label_rows = self.label_rows
@@ -1303,7 +1305,7 @@ class efc_matrix_dataset:
             column = np.where(column == self.label_columns)[0]
 
         series = []
-        for year in tqdm(self.rangeyear, leave=self.leave_tqdm):
+        for year in tqdm(self.rangeyear, file=sys.stdout, leave=self.leave_tqdm):
             series.append(self.matrices[year].matrix[row,column])
         series = np.array(series)
 
@@ -1392,7 +1394,7 @@ class efc_matrix_dataset:
 
     def get_smoothing_moving_average(self, k=3, inplace=False):
         matrices = {}
-        for year in tqdm(self.rangeyear, leave=self.leave_tqdm):
+        for year in tqdm(self.rangeyear, file=sys.stdout, leave=self.leave_tqdm):
             kleft = max(year-k,self.rangeyear[0])
             kright = min(year+k,self.rangeyear[-1])
             mat = self.matrices[year].matrix.copy()
@@ -1414,14 +1416,14 @@ class efc_matrix_dataset:
             
     def get_masked_from_indices(self, list_rows=None, list_columns=None):
         data = {}
-        for year in tqdm(self.rangeyear, leave=self.leave_tqdm):
+        for year in tqdm(self.rangeyear, file=sys.stdout, leave=self.leave_tqdm):
             self.matrices[year].label_rows = np.array(self.label_rows)
             self.matrices[year].label_columns = np.array(self.label_columns)
             data[year] = self.matrices[year].get_masked_from_indices(list_rows=list_rows, list_columns=list_columns).get_matrix(aspandas=True)
         return efc_matrix_dataset(data)
 
     def store_matrices(self, folder, name, store_type='csv'):
-        for year in tqdm(self.rangeyear, leave=self.leave_tqdm):
+        for year in tqdm(self.rangeyear, file=sys.stdout, leave=self.leave_tqdm):
             string_year = str(year)
             string_year = string_year.replace(' ', '_')
             name_file = folder + name.replace('{}',string_year) + '.' + store_type
@@ -1441,7 +1443,7 @@ class efc_matrix_dataset:
         if row in self.label_rows:
             row = np.where(row == np.array(self.label_rows))[0]
         series = self.matrices[self.rangeyear[0]].matrix[row,:]
-        for year in tqdm(self.rangeyear[1:], leave=self.leave_tqdm):
+        for year in tqdm(self.rangeyear[1:], file=sys.stdout, leave=self.leave_tqdm):
             series = np.vstack([series, self.matrices[year].matrix[row,:]])
         if aspandas:
             return pd.DataFrame(series, index=self.rangeyear, columns=self.label_columns)
@@ -1451,7 +1453,7 @@ class efc_matrix_dataset:
         if column in self.label_columns:
             column = np.where(column == np.array(self.label_columns))[0]
         series = self.matrices[self.rangeyear[0]].matrix[:, column]
-        for year in tqdm(self.rangeyear[1:], leave=self.leave_tqdm):
+        for year in tqdm(self.rangeyear[1:], file=sys.stdout, leave=self.leave_tqdm):
             series = np.vstack([series, self.matrices[year].matrix[:, column]])
         if aspandas:
             return pd.DataFrame(series, index=self.rangeyear, columns=self.label_rows)
@@ -1463,7 +1465,7 @@ class efc_matrix_dataset:
         if column in self.label_columns:
             column = np.where(column == np.array(self.label_columns))[0]
         series = []
-        for year in tqdm(self.rangeyear, leave=self.leave_tqdm):
+        for year in tqdm(self.rangeyear, file=sys.stdout, leave=self.leave_tqdm):
             series.append(self.matrices[year].matrix[row, column])
         if aspandas:
             return pd.DataFrame(series, index=self.rangeyear)
@@ -1481,7 +1483,7 @@ class efc_matrix_dataset:
         if isinstance(complexity, pd.DataFrame):
             complexity = complexity.to_numpy()
         sector = {}
-        for i,year in tqdm(enumerate(self.rangeyear), leave=self.leave_tqdm):
+        for i,year in tqdm(enumerate(self.rangeyear), file=sys.stdout, leave=self.leave_tqdm):
             efc_mat = self.matrices[year]
             efc_mat.label_rows = self.label_rows
             efc_mat.label_columns = self.label_columns
@@ -1500,7 +1502,7 @@ class efc_matrix_dataset:
         :return: the efc_matrix_dataset collecting the database
         '''
         supp = {}
-        for year in tqdm(rangeyear, leave=leave_tqdm):
+        for year in tqdm(rangeyear, file=sys.stdout, leave=leave_tqdm):
             path2 = path.replace('{}','{}'.format(year))
             mat = None
             if path[-4:] == '.csv':
@@ -1529,7 +1531,7 @@ class efc_matrix_dataset:
         efitness = []
 
         if isinstance(complexity, np.ndarray) or isinstance(complexity, np.matrix):
-            for i,year in tqdm(enumerate(cls.rangeyear), leave=cls.leave_tqdm):
+            for i,year in tqdm(enumerate(cls.rangeyear), file=sys.stdout, leave=cls.leave_tqdm):
                 com = complexity[:,i]
                 ef = np.dot(cls.matrices[year].matrix, com).flatten()
                 ef /= np.sum(com)
