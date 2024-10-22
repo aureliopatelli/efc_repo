@@ -19,3 +19,22 @@ Main features are:
 
 
 ## efc_matrix_dataset class
+This class provides the routines to handle a collection of data with many snapshots, for example when the data is available on many years.
+
+
+# TUTORIAL
+The package provides a tutorial jupyter notebook in the *tutorial* folder
+
+
+
+# USAGE
+'''python
+import efc_repo
+
+# load the stored csv data in matrix format
+data = efc_repo.efc_matrix('folder/stored_data.csv')
+
+# get the Fitness
+data.get_fitness(aspandas=True)
+
+'''

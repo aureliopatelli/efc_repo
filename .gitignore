@@ -3,3 +3,5 @@ __pycache__/*
 .ipynb_checkpoints/*
 .DS_Store
 /.ipynb_checkpoints
+*.ipynb
+/efc_repo/__pycache__

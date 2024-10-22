@@ -1,6 +1,4 @@
 import numpy as np
-import pandas as pd
-import random
 import scipy
 
 def get_edgelist_from_numpy(mat, label=None):

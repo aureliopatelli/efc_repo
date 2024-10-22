@@ -8,6 +8,8 @@ setuptools.setup(
     version="0.1",
     author="Aurelio Patelli",
     author_email="aurelio.patelli@cref.com",
+    license='MIT',
+    keywords="networks economics fitness complexity",
     description="Package for economic fitness and complexity framework",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -29,4 +31,5 @@ setuptools.setup(
                       "tqdm>=4.52.0",
                       "bicm>=3.3.0"
                       ],
+    zip_safe=False,
 )

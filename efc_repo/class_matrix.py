@@ -1,10 +1,5 @@
 ####################################################################################
-############ TODO
-## - check everything work with the scipy sparse module (needs -> NODF, projections)
-## - projections (?)
-##
 ####################################################################################
-
 import numpy as np
 import pandas as pd
 import scipy, bicm, copy, ot, sys
@@ -1316,7 +1311,7 @@ class efc_matrix_dataset:
 
     def get_list_dataset(self):
         dataset = self.matrices[self.rangeyear[0]].get_matrix(aspandas=True).unstack()
-        for year in tqdm(self.rangeyear[1:], leave=self.leave_tqdm):
+        for year in tqdm(self.rangeyear[1:], file=sys.stdout, leave=self.leave_tqdm):
             dataset = pd.concat([dataset, self.matrices[year].get_matrix(aspandas=True).unstack()], axis=1, sort=True)
         dataset.columns = self.rangeyear
         return dataset
@@ -1325,7 +1320,7 @@ class efc_matrix_dataset:
         nlags = len(self.rangeyear)-1
         dataset = self.get_list_dataset()
         autocorrelation = []
-        for idx in tqdm(dataset.index, leave=self.leave_tqdm):
+        for idx in tqdm(dataset.index, file=sys.stdout, leave=self.leave_tqdm):
             x = dataset.loc[idx]
             autocorrelation.append(tsaplots.acf(x, nlags=nlags))
         autocorrelation = pd.DataFrame(autocorrelation, index=dataset.index, columns=range(nlags+1))
@@ -1377,7 +1372,7 @@ class efc_matrix_dataset:
         matrices = {}
         previous_matrix = self.matrices[self.rangeyear[0]].matrix.copy()
         matrices[self.rangeyear[0]] = previous_matrix.copy()
-        for count in tqdm(range(1,len(self.rangeyear)), leave=self.leave_tqdm):
+        for count in tqdm(range(1,len(self.rangeyear)), file=sys.stdout, leave=self.leave_tqdm):
             rolling_matrix = alpha*self.matrices[self.rangeyear[count]].matrix + one_minus_alpha*previous_matrix
             previous_matrix = self.matrices[self.rangeyear[count]].matrix
             matrices[self.rangeyear[count]] = rolling_matrix.copy()
