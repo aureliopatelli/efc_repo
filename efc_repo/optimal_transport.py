@@ -328,6 +328,3 @@ def sinkhorn_divergence_logs(mat_org, sum0, sum1, max_iteration=1000, min_distan
         return alpha, beta
 
 
-
-#def sinkhorn_distance():
-

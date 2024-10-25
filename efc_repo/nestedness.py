@@ -29,7 +29,7 @@ def sNODF(bin_rca):
 
 def NODF(bin_rca, rowcol=False, removezero=False):
     '''
-    Routine to evaluate the sNODF (Symetric NODF)
+    Routine to evaluate the NODF
     
     :param bin_rca: raw/binary matrix to be considered in the analysis
     :type bin_rca: numpy.ndarray
@@ -37,7 +37,7 @@ def NODF(bin_rca, rowcol=False, removezero=False):
     :param rowcol: return the row and column components
     :type rowcol: bool (False)
         
-    :param removezero: remove the row and columns ith zero degree
+    :param removezero: remove the row and columns with zero degree
     :type removezero: bool (False)
         
     '''

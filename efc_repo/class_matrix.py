@@ -779,7 +779,7 @@ class efc_matrix:
             pval = myGraph.get_bicm_matrix()
             size_random_ensemble = int(5./alpha)
             random_matrices = {}
-            for r in tqdm(range(size_random_ensemble)):
+            for r in tqdm(range(size_random_ensemble), file=sys.stdout):
                 random_matrices[r] = pj.random_binary_matrix(pval)
                 
             if verbose:
@@ -788,7 +788,7 @@ class efc_matrix:
             if method == 'cooccurrence':
                 proj = pj.occurrence_matrix(self.matrix, row_proj=rows)
                 adj = np.zeros(proj.shape)
-                for r in tqdm(range(size_random_ensemble)):
+                for r in tqdm(range(size_random_ensemble), file=sys.stdout):
                     random_proj = pj.occurrence_matrix(random_matrices[r], row_proj=rows)
                     adj += (random_proj > proj).astype(int)
                 adj /= size_random_ensemble
@@ -797,7 +797,7 @@ class efc_matrix:
             elif method == 'taxonomy':
                 proj = pj.taxonomy_matrix(self.matrix, row_proj=rows)
                 adj = np.zeros(proj.shape)
-                for r in tqdm(range(size_random_ensemble)):
+                for r in tqdm(range(size_random_ensemble), file=sys.stdout):
                     random_proj = pj.taxonomy_matrix(random_matrices[r], row_proj=rows)
                     adj += (random_proj > proj).astype(int)
                 adj /= size_random_ensemble
@@ -806,7 +806,7 @@ class efc_matrix:
             elif method == 'assist matrix':
                 proj = pj.assist_matrix(self.matrix, self.matrix, row_proj=rows)
                 adj = np.zeros(proj.shape)
-                for r in tqdm(range(size_random_ensemble)):
+                for r in tqdm(range(size_random_ensemble), file=sys.stdout):
                     random_proj = pj.assist_matrix(random_matrices[r], random_matrices[r], row_proj=rows)
                     adj += (random_proj > proj).astype(int)
                 adj /= size_random_ensemble
@@ -815,7 +815,7 @@ class efc_matrix:
             elif method == 'product space':
                 proj = pj.proximity_matrix(self.matrix, row_proj=rows)
                 adj = np.zeros(proj.shape)
-                for r in tqdm(range(size_random_ensemble)):
+                for r in tqdm(range(size_random_ensemble), file=sys.stdout):
                     random_proj = pj.proximity_matrix(random_matrices[r], row_proj=rows)
                     adj += (random_proj > proj).astype(int)
                 adj /= size_random_ensemble
@@ -1393,10 +1393,10 @@ class efc_matrix_dataset:
             kleft = max(year-k,self.rangeyear[0])
             kright = min(year+k,self.rangeyear[-1])
             mat = self.matrices[year].matrix.copy()
-            for k in range(kleft,year):
-                mat += self.matrices[k].matrix
-            for k in range(year+1,kright):
-                mat += self.matrices[k].matrix 
+            for i in range(kleft,year):
+                mat += self.matrices[i].matrix
+            for i in range(year+1,kright):
+                mat += self.matrices[i].matrix
             matrices[year] = mat.copy() / len(range(kleft,kright))
             
         if inplace:
@@ -1408,7 +1408,40 @@ class efc_matrix_dataset:
         data.label_rows=self.label_rows
         data.label_columns=self.label_columns
         return data
-            
+
+    def get_smoothing_kolmogorov_zurbenko(self, m=3, k=2, inplace=False):
+        coeff = np.ones(m)
+        for i in range(1, k):
+            t = np.zeros((m, m + i * (m - 1)))
+            for km in range(m):
+                t[km, km:km + coeff.size] = coeff
+            coeff = np.sum(t, axis=0)
+        coeff /= m ** k
+
+        data_full = np.array([self.matrices[y].matrix.T for y in self.rangeyear]).T
+        data_full = np.reshape(data_full, (data_full.shape[0] * data_full.shape[1], data_full.shape[2]))
+
+        scale = (coeff.size - 1) // 2
+        for r in tqdm(range(data_full.shape[0]), file=sys.stdout, leave=self.leave_tqdm):
+            kz = np.convolve(data_full[r,:],coeff)
+            data_full[r,:] = kz[scale:-scale]
+            data_full[r,:scale] += kz[:scale][::-1]
+            data_full[r, -scale:] += kz[-scale:][::-1]
+
+        matrices = {}
+        for i,year in tqdm(enumerate(self.rangeyear), file=sys.stdout, leave=self.leave_tqdm):
+            matrices[year] = np.reshape(data_full[:,i], (self.shape[0],self.shape[1]))
+
+        if inplace:
+            del self.matrices
+            self.matrices = matrices
+            return self
+
+        data = efc_matrix_dataset(matrices)
+        data.label_rows = self.label_rows
+        data.label_columns = self.label_columns
+        return data
+
     def get_masked_from_indices(self, list_rows=None, list_columns=None):
         data = {}
         for year in tqdm(self.rangeyear, file=sys.stdout, leave=self.leave_tqdm):

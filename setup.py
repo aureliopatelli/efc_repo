@@ -13,7 +13,7 @@ setuptools.setup(
     description="Package for economic fitness and complexity framework",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/",
+    url="https://github.com/aureliopatelli/efc_repo.git",
     packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",

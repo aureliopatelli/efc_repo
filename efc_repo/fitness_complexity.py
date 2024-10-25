@@ -396,8 +396,8 @@ def fitness_complexity_servedio(bin_rca, max_iteration = 1000, check_stop='dista
 
 def fitness_complexity_mazzolini(bin_rca, max_iteration = 1000, check_stop='distance', min_distance=1e-14, normalization='mean', fit_ic=[], com_ic=[], removelowdegrees=False, verbose=False, gamma=-1, alpha=1.0):
     """
-    Routine to evaluate the fitness and the complexity from Tacchella et al. (2012), 'A new metrics for countries' Fitness and products Complexity', Sci.Rep.
-    
+    Routine to evaluate the fitness and the complexity from
+
     :param bin_rca: matrix representing the bipartite network
     :type bin_rca: numpy.array, pandas.DataFrame, scpi.sparse
     
@@ -544,7 +544,7 @@ def fitness_complexity_mazzolini(bin_rca, max_iteration = 1000, check_stop='dist
 def fitness_complexity_mariani(bin_rca, max_iteration=1000, check_stop='distance', min_distance=1e-14,
                                  normalization='mean', fit_ic=[], com_ic=[], removelowdegrees=False, verbose=False):
     """
-    Routine to evaluate the fitness and the complexity from Tacchella et al. (2012), 'A new metrics for countries' Fitness and products Complexity', Sci.Rep.
+    Routine to evaluate the fitness and the complexity from
 
     :param bin_rca: matrix representing the bipartite network
     :type bin_rca: numpy.array, pandas.DataFrame, scpi.sparse

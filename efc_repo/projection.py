@@ -59,15 +59,6 @@ def proximity_matrix(mat, row_proj=False):
     np.divide(np.ones_like(ubiMax,dtype=float), ubiMax, out=ubiMax, where=ubiMax != 0)
     return np.multiply(Cooc,ubiMax)
 
-def net_max(tax):
-    adj = np.zeros(np.shape(tax))
-    NX,NY = np.shape(tax)
-    for x in range(NX):
-        row = tax[x,:].copy()
-        row[x] = 0
-        adj[x,np.argmax(row)] = 1
-    return adj
-
 def net_top(tax, top=2):
     NX,NY = np.shape(tax)
     adj = np.zeros(np.shape(tax))
@@ -75,6 +66,15 @@ def net_top(tax, top=2):
         row = tax[x,:].copy()
         row[x] = 0
         adj[x,np.argsort(row)[::-1][:top]] = 1
+    return adj
+
+def net_max(tax):
+    adj = np.zeros(np.shape(tax))
+    NX,NY = np.shape(tax)
+    for x in range(NX):
+        row = tax[x,:].copy()
+        row[x] = 0
+        adj[x,np.argmax(row)] = 1
     return adj
 
 def net_atleast(tax, val=0.95):
